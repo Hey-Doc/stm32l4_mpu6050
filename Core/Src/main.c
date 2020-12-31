@@ -152,6 +152,9 @@ int main(void)
 	ax=MPU6050.Ax;
 	ay=MPU6050.Ay;
 	az=MPU6050.Az;
+    //sensor processing//
+
+
 	printf("x: %.3f   y: %.3f   z: %3f\n",&ax,&ay,&az);
 	HAL_Delay(1000);
     /* USER CODE BEGIN 3 */
