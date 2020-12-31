@@ -24,6 +24,8 @@
 /* USER CODE BEGIN Includes */
 #include "mpu6050.h"
 #include "i2c.h"
+#include "math.h"
+#define buflen 100
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,6 +96,44 @@ PUTCHAR_PROTOTYPE
  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 1);
  return ch;
 }
+
+
+float magnitude(float *vec)
+{
+  return sqrt(pow(vec[0],2) + pow(vec[1],2) + pow(vec[2],2));
+}
+float mean(float *vec)
+{
+  int sum=0;
+  for (int i=0;i<10;i++){sum+=vec[i];}
+  return sum/10;
+}
+float stnd(float *vec)
+{
+  int s=0;
+  int m=mean(vec);
+  for (int i=0;i<10;i++){s+=pow((vec[i]-m),2);}
+  return sqrt(s/10);
+}
+void detect(float stdv, float meanv, float stdm, float meanm)
+{
+	if(meanv<=-10.5){
+		if(stdm<=4.4){
+			printf("notfall\n");
+		}
+		else{
+			printf("fall\n");
+		}
+	}
+	else{
+		if(meanm<=89){
+			printf("fall\n");
+		}
+		else{
+			printf("notfall\n");
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -103,7 +143,19 @@ PUTCHAR_PROTOTYPE
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	float buffer_a[buflen][3]={};
+	float Axyz[3]={0,0,0};
+	float V[3]={0,0,0};
+	float pastAxyz[3]={0,0,0};
+	float magV[10]={};
+	float magM[10]={};
+	float meanV=0.0;
+	float stdV=0.0;
+	float meanM=0.0;
+	float stdM=0.0;
+	float sizV=0.0;
+	int cyc = 0;
+	int CycTrue = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -138,27 +190,51 @@ int main(void)
   MX_USB_OTG_FS_USB_Init();
   /* USER CODE BEGIN 2 */
   while (MPU6050_Init(&hi2c1) == 1);
-  double ax;
-  double ay;
-  double az;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
 	MPU6050_Read_Accel(&hi2c1, &MPU6050);
-	ax=MPU6050.Ax;
-	ay=MPU6050.Ay;
-	az=MPU6050.Az;
+	Axyz[0]=100*(MPU6050.Ax);
+	Axyz[1]=100*(MPU6050.Ay);
+	Axyz[2]=100*(MPU6050.Az);
     //sensor processing//
+	pastAxyz[0]=buffer_a[cyc][0];
+	pastAxyz[1]=buffer_a[cyc][1];
+	pastAxyz[2]=buffer_a[cyc][2];
 
+	buffer_a[cyc][0]=Axyz[0];
+	buffer_a[cyc][1]=Axyz[1];
+	buffer_a[cyc][2]=Axyz[2];
+	magM[cyc%10]=magnitude(Axyz);
+	for (int i=0;i<3;i++){
+		V[i]+=(Axyz[i]-pastAxyz[i])/buflen;
+	}
+	sizV=magnitude(V);
+	magV[cyc%10]=0;
+	for (int i=0;i<3;i++){
+		magV[cyc%10]+=Axyz[i]*V[i]/sizV;
+	}
 
-	printf("x: %.3f   y: %.3f   z: %3f\n",&ax,&ay,&az);
-	HAL_Delay(1000);
-    /* USER CODE BEGIN 3 */
+	meanM=mean(magM);
+	stdM=stnd(magM);
+	meanV=mean(magV);
+	stdV=stnd(magV);
+
+	cyc++;
+	if(cyc==buflen && !CycTrue){CycTrue=1;}
+	cyc=cyc%buflen;
+
+	if(CycTrue){
+		detect(stdV, meanV, stdM, meanM);
+	}
+	HAL_Delay(100);
   }
+  /* USER CODE END WHILE */
+  /* USER CODE BEGIN 3 */
   /* USER CODE END 3 */
 }
 
